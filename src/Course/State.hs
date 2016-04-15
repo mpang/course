@@ -39,8 +39,8 @@ instance Functor (State s) where
     (a -> b)
     -> State s a
     -> State s b
-  (<$>) =
-      error "todo: Course.State#(<$>)"
+  (<$>) f (State g) = State result
+    where result s = let temp = g s in (f $ fst temp, snd temp)
 
 -- | Implement the `Applicative` instance for `State s`.
 --
@@ -57,14 +57,15 @@ instance Applicative (State s) where
   pure ::
     a
     -> State s a
-  pure =
-    error "todo: Course.State pure#instance (State s)"
+  pure value = State $ \s -> (value, s)
   (<*>) ::
     State s (a -> b)
     -> State s a
-    -> State s b 
-  (<*>) =
-    error "todo: Course.State (<*>)#instance (State s)"
+    -> State s b
+  (<*>) (State f) (State g) = State result
+    where result s = let (h, s1) = f s
+                         (x, s2) = g s1
+                      in (h x, s2)
 
 -- | Implement the `Bind` instance for `State s`.
 --
@@ -78,8 +79,8 @@ instance Monad (State s) where
     (a -> State s b)
     -> State s a
     -> State s b
-  (=<<) =
-    error "todo: Course.State (=<<)#instance (State s)"
+  (=<<) k (State f) = State result
+    where result s = let temp = f s in runState (k $ fst temp) (snd temp)
 
 -- | Run the `State` seeded with `s` and retrieve the resulting state.
 --
@@ -88,8 +89,7 @@ exec ::
   State s a
   -> s
   -> s
-exec =
-  error "todo: Course.State#exec"
+exec (State f) s = snd $ f s
 
 -- | Run the `State` seeded with `s` and retrieve the resulting value.
 --
@@ -98,8 +98,7 @@ eval ::
   State s a
   -> s
   -> a
-eval =
-  error "todo: Course.State#eval"
+eval (State f) s = fst $ f s
 
 -- | A `State` where the state also distributes into the produced value.
 --
@@ -107,8 +106,7 @@ eval =
 -- (0,0)
 get ::
   State s s
-get =
-  error "todo: Course.State#get"
+get = State $ \s -> (s, s)
 
 -- | A `State` where the resulting state is seeded with the given value.
 --
@@ -117,8 +115,7 @@ get =
 put ::
   s
   -> State s ()
-put =
-  error "todo: Course.State#put"
+put state = State $ const ((), state)
 
 -- | Find the first element in a `List` that satisfies a given predicate.
 -- It is possible that no element is found, hence an `Optional` result.
@@ -139,8 +136,11 @@ findM ::
   (a -> f Bool)
   -> List a
   -> f (Optional a)
-findM =
-  error "todo: Course.State#findM"
+findM _ Nil               = return Empty
+findM predicate (t :. ts) = do
+  result <- predicate t
+  if result then return $ Full t
+  else findM predicate ts
 
 -- | Find the first element in a `List` that repeats.
 -- It is possible that no element repeats, hence an `Optional` result.
@@ -153,8 +153,9 @@ firstRepeat ::
   Ord a =>
   List a
   -> Optional a
-firstRepeat =
-  error "todo: Course.State#firstRepeat"
+firstRepeat list = eval state S.empty
+  where predicate x = State $ \s -> if S.member x s then (True, s) else (False, S.insert x s)
+        state = findM predicate list
 
 -- | Remove all duplicate elements in a `List`.
 -- /Tip:/ Use `filtering` and `State` with a @Data.Set#Set@.
@@ -166,8 +167,9 @@ distinct ::
   Ord a =>
   List a
   -> List a
-distinct =
-  error "todo: Course.State#distinct"
+distinct list = eval state S.empty
+  where predicate x = State $ \s -> if S.member x s then (False, s) else (True, S.insert x s)
+        state = filtering predicate list
 
 -- | A happy number is a positive integer, where the sum of the square of its digits eventually reaches 1 after repetition.
 -- In contrast, a sad number (not a happy number) is where the sum of the square of its digits never reaches 1
@@ -193,5 +195,5 @@ distinct =
 isHappy ::
   Integer
   -> Bool
-isHappy =
-  error "todo: Course.State#isHappy"
+isHappy n = contains 1 $ firstRepeat (produce square $ fromInteger n)
+  where square x = foldRight (\c accum -> digitToInt c * digitToInt c + accum) 0 $ show' x
