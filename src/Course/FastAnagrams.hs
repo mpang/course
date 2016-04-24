@@ -14,8 +14,11 @@ fastAnagrams ::
   Chars
   -> Filename
   -> IO (List Chars)
-fastAnagrams =
-  error "todo: Course.FastAnagrams#fastAnagrams"
+fastAnagrams string filename = helper <$> readFile filename
+  where
+    helper content =
+      let dictionary = S.fromList $ hlist $ lines content
+        in filter (`S.member` dictionary) $ permutations string
 
 newtype NoCaseString =
   NoCaseString {
