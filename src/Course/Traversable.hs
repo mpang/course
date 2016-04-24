@@ -33,4 +33,4 @@ instance Traversable List where
     -> List a
     -> f (List b)
   traverse f =
-    foldRight (\a b -> (:.) <$> f a <*> b) (pure Nil)
+    foldRight (\a b -> lift2 (:.) (f a) b) (pure Nil)
