@@ -187,7 +187,7 @@ data Digit =
   | Seven
   | Eight
   | Nine
-  deriving (Eq, Enum, Bounded)
+  deriving (Eq, Enum, Bounded, Show)
 
 showDigit ::
   Digit
@@ -218,7 +218,7 @@ data Digit3 =
   D1 Digit
   | D2 Digit Digit
   | D3 Digit Digit Digit
-  deriving Eq
+  deriving (Eq, Show)
 
 -- Possibly convert a character to a digit.
 fromChar ::
@@ -323,5 +323,95 @@ fromChar _ =
 dollars ::
   Chars
   -> Chars
-dollars =
-  error "todo: Course.Cheque#dollars"
+dollars string = dn ++ " and " ++ cn
+  where
+    (d, c) = toDot string
+    dn     = case d of
+      Nil           -> "zero dollars"
+      (Zero :. Nil) -> "zero dollars"
+      (One :. Nil)  -> "one dollar"
+      _             -> translateDigits d ++ " dollars"
+    cn     = case c of
+      Nil                  -> "zero cents"
+      (Zero :. One :. Nil) -> "one cent"
+      (c' :. Nil)          -> showDigit3 (D2 c' Zero) ++ " cents"
+      (c' :. c'' :. _)     -> showDigit3 (D2 c' c'') ++ " cents"
+
+-- helper functions
+
+translateDigits :: List Digit -> Chars
+translateDigits digits = translateDigitsHelper Nil (digitsToDigit3s $ reverseDigits digits) illion
+  where
+  translateDigitsHelper :: List Chars -> List Digit3 -> List Chars -> Chars
+  translateDigitsHelper accum Nil _                               = unwords accum
+  translateDigitsHelper _ _ Nil                                   = error "Number too big"
+  translateDigitsHelper accum (D1 Zero :. ds) (_ :. is)           = translateDigitsHelper accum ds is
+  translateDigitsHelper accum (D2 Zero Zero :. ds) (_ :. is)      = translateDigitsHelper accum ds is
+  translateDigitsHelper accum (D3 Zero Zero Zero :. ds) (_ :. is) = translateDigitsHelper accum ds is
+  translateDigitsHelper accum (d :. ds) (i :. is)                 = translateDigitsHelper ((showDigit3 d ++ space i) :. accum) ds is
+
+  space :: Chars -> Chars
+  space "" = ""
+  space s  = ' ' :. s
+
+  digitsToDigit3s :: List Digit -> List Digit3
+  digitsToDigit3s Nil                = Nil
+  digitsToDigit3s (a :. Nil)         = D1 a :. Nil
+  digitsToDigit3s (a :. b :. Nil)    = D2 a b :. Nil
+  digitsToDigit3s (a :. b :. c :. d) = D3 a b c :. digitsToDigit3s d
+
+  reverseDigits :: List Digit -> List Digit
+  reverseDigits = reverseDigitsHelper . reverse
+    where
+      reverseDigitsHelper Nil                = Nil
+      reverseDigitsHelper (a :. Nil)         = a :. Nil
+      reverseDigitsHelper (a :. b :. Nil)    = b :. a :. Nil
+      reverseDigitsHelper (a :. b :. c :. d) = c :. b :. a :. reverseDigitsHelper d
+
+toDot :: Chars -> (List Digit, List Digit)
+toDot string =
+  case c of
+    Nil -> (stringToDigits d, Nil)
+    (_ :. c') -> (stringToDigits d, stringToDigits c')
+  where
+    (d, c) = break (== '.') string
+
+    stringToDigits :: Chars -> List Digit
+    stringToDigits Nil    = Nil
+    stringToDigits string' = string' >>= helper
+      where
+        helper c'' = case fromChar c'' of
+          Empty  -> Nil
+          Full d' -> d' :. Nil
+
+showDigit3 :: Digit3 -> Chars
+showDigit3 d = case d of
+  (D1 d') -> showDigit d'
+  (D2 Zero d') -> showDigit d'
+  (D2 One d') -> case d' of
+    Zero  -> "ten"
+    One   -> "eleven"
+    Two   -> "twelve"
+    Three -> "thirteen"
+    Four  -> "fourteen"
+    Five  -> "fifteen"
+    Six   -> "sixteen"
+    Seven -> "seventeen"
+    Eight -> "eighteen"
+    Nine  -> "nineteen"
+  (D2 Two d') -> "twenty" .++. d'
+  (D2 Three d') -> "thirty" .++. d'
+  (D2 Four d') -> "forty" .++. d'
+  (D2 Five d') -> "fifty" .++. d'
+  (D2 Six d') -> "sixty" .++. d'
+  (D2 Seven d') -> "seventy" .++. d'
+  (D2 Eight d') -> "eighty" .++. d'
+  (D2 Nine d') -> "ninety" .++. d'
+  (D3 Zero Zero Zero) -> ""
+  (D3 Zero d' d'') -> showDigit3 $ D2 d' d''
+  (D3 d' Zero Zero) -> showDigit d' ++ " hundred"
+  (D3 d' d'' d''') -> showDigit d' ++ " hundred and " ++ showDigit3 (D2 d'' d''')
+  where
+    prefix .++. digit = case digit of
+      Zero -> prefix
+      _    -> prefix ++ "-" ++ showDigit digit
